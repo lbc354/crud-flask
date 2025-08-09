@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+
+{% block title %}
+  Home
+{% endblock %}
+
+{% block content %}
+  <h1>Livros</h1>
+
+  <form action="/livro" method="post">
+    <input type="text" id="nome" name="nome" placeholder="Nome" required />
+    <select id="autor" name="autor" required>
+      <option value="" selected disabled>Selecione o autor</option>
+    </select>
+    <input type="submit" value="Confirmar" />
+  </form>
+
+  <ul id="lista-livros"></ul>
+
+  <!-- lista livros -->
+  <script>
+    fetch('/livros')
+      .then((response) => response.json())
+      .then((data) => {
+        const lista = document.getElementById('lista-livros')
+        if (data.length === 0) {
+          lista.innerHTML = '<li>Nenhum livro encontrado.</li>'
+        } else {
+          data.forEach((item) => {
+            const li = document.createElement('li')
+            li.textContent = `${item.livro} - ${item.autor}`
+            lista.appendChild(li)
+          })
+        }
+      })
+      .catch((error) => {
+        console.error('Erro ao buscar livros:', error)
+      })
+  </script>
+
+  <!-- lista autores no formulário -->
+  <script>
+    fetch('/autores')
+      .then((response) => response.json())
+      .then((data) => {
+        const select = document.getElementById('autor')
+        data.forEach((autor) => {
+          const option = document.createElement('option')
+          option.value = autor.autor_id
+          option.textContent = autor.autor
+          select.appendChild(option)
+        })
+      })
+      .catch((error) => {
+        console.error('Erro ao buscar autores:', error)
+      })
+  </script>
+{% endblock %}

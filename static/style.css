@@ -1,0 +1,19 @@
+.bi-hurricane {
+  pointer-events: none;
+  display: inline-block; /* necessário para rotação funcionar bem */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bi-hurricane {
+    animation: bi-hurricane-spin infinite 10s linear;
+  }
+}
+
+@keyframes bi-hurricane-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
