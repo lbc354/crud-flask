@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block title %}
+  Livros
+{% endblock %}
+
+{% block content %}
+  <h1>Livros</h1>
+
+  <form id="formCriarLivro" action="/livro" method="post">
+    <input type="text" id="nome" name="nome" placeholder="Nome" required />
+    <select id="autor" name="autor" required>
+      <option value="" selected disabled>Selecione autor</option>
+    </select>
+    <input type="submit" value="Criar" />
+  </form>
+
+  <ul id="lista-livros"></ul>
+
+  <!-- modal de edição -->
+  <div class="modal fade" id="modalEditar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Livro</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formEditar">
+            <div class="mb-2">
+              <label for="editarNome" class="form-label">Título do Livro</label>
+              <input type="text" class="form-control" id="editarNome" required />
+            </div>
+            <div class="mb-2">
+              <label for="editarAutor" class="form-label">Autor</label>
+              <select id="editarAutor" class="form-select" required>
+                <option value="" selected disabled>Selecione o autor</option>
+              </select>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnSalvarEdicao">Editar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- scripts -->
+  <script>
+    // variável global para o livro selecionado (visível para o handler de salvar)
+    let livroSelecionadoId = null
+    
+    // função para carregar livros e montar a lista (também registra listeners de editar/excluir)
+    function carregarLivros() {
+      fetch('/livros')
+        .then((response) => response.json())
+        .then((data) => {
+          const lista = document.getElementById('lista-livros')
+          lista.innerHTML = ''
+    
+          if (!Array.isArray(data) || data.length === 0) {
+            lista.innerHTML = '<li>Nenhum livro encontrado.</li>'
+            return
+          }
+    
+          data.forEach((item) => {
+            const li = document.createElement('li')
+    
+            // guarde o id no elemento para facilitar (data attribute)
+            li.dataset.livroId = item.livro_id
+    
+            li.innerHTML = `${item.livro} - ${item.autor} <i class="bi bi-pencil-square text-warning ms-2" style="cursor:pointer" title="Editar"></i> <i class="bi bi-trash text-danger ms-2" style="cursor:pointer" title="Excluir"></i>`
+    
+            // editar: abrir modal e preencher campos
+            li.querySelector('.bi-pencil-square').addEventListener('click', () => {
+              livroSelecionadoId = item.livro_id // variável global usada pelo botão Salvar
+              document.getElementById('editarNome').value = item.livro
+              document.getElementById('editarAutor').value = item.autor_id
+    
+              const modal = new bootstrap.Modal(document.getElementById('modalEditar'))
+              modal.show()
+            })
+    
+            // excluir: dentro do loop (tem acesso a item e li)
+            li.querySelector('.bi-trash').addEventListener('click', () => {
+              if (!confirm(`Tem certeza que deseja excluir "${item.livro}"?`)) return
+    
+              fetch(`/livro/${item.livro_id}`, { method: 'DELETE' })
+                .then((res) => {
+                  if (!res.ok) return res.json().then((j) => Promise.reject(j))
+                  return res.json()
+                })
+                .then((resp) => {
+                  // opcional: remover o li sem reload
+                  li.remove()
+                  // ou you can recarregar tudo: carregarLivros();
+                  alert(resp.message || 'Livro excluído com sucesso!')
+                })
+                .catch((err) => {
+                  console.error('Erro ao excluir livro:', err)
+                  alert(err.error || 'Erro ao excluir livro.')
+                })
+            })
+    
+            lista.appendChild(li)
+          })
+        })
+        .catch((error) => {
+          console.error('Erro ao buscar livros:', error)
+        })
+    }
+    
+    // carregar autores em ambos selects (criação e edição)
+    function carregarAutores() {
+      fetch('/autores')
+        .then((response) => response.json())
+        .then((data) => {
+          const selectForm = document.getElementById('autor')
+          const selectModal = document.getElementById('editarAutor')
+    
+          // limpa antes de popular (evita duplicatas em recarregamentos)
+          selectForm.innerHTML = '<option value="" selected disabled>Selecione o autor</option>'
+          selectModal.innerHTML = '<option value="" selected disabled>Selecione o autor</option>'
+    
+          data.forEach((autor) => {
+            const option1 = document.createElement('option')
+            option1.value = autor.id
+            option1.textContent = autor.nome
+            selectForm.appendChild(option1)
+    
+            const option2 = document.createElement('option')
+            option2.value = autor.id
+            option2.textContent = autor.nome
+            selectModal.appendChild(option2)
+          })
+        })
+        .catch((error) => {
+          console.error('Erro ao buscar autores:', error)
+        })
+    }
+    
+    // handler do botão salvar edição (usa livroSelecionadoId)
+    document.getElementById('btnSalvarEdicao').addEventListener('click', () => {
+      if (!livroSelecionadoId) {
+        alert('Nenhum livro selecionado para editar.')
+        return
+      }
+    
+      const nome = document.getElementById('editarNome').value
+      const autor = document.getElementById('editarAutor').value
+    
+      fetch(`/livro/${livroSelecionadoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome, autor })
+      })
+        .then((res) => {
+          if (!res.ok) return res.json().then((j) => Promise.reject(j))
+          return res.json()
+        })
+        .then((data) => {
+          alert(data.message || 'Livro atualizado com sucesso!')
+          // fecha o modal
+          const modalEl = document.getElementById('modalEditar')
+          const modalInstance = bootstrap.Modal.getInstance(modalEl)
+          if (modalInstance) modalInstance.hide()
+    
+          // recarrega a lista (ou atualize o li diretamente)
+          carregarLivros()
+        })
+        .catch((err) => {
+          console.error('Erro ao atualizar livro:', err)
+          alert(err.error || 'Erro ao atualizar livro.')
+        })
+    })
+    
+    // inicializa
+    carregarAutores()
+    carregarLivros()
+  </script>
+
+  <script>
+    // intercepta o submit do form de criação de livro
+    const formCriar = document.getElementById('formCriarLivro') || document.querySelector('form[action="/livro"]')
+    
+    if (formCriar) {
+      formCriar.addEventListener('submit', function (e) {
+        e.preventDefault()
+    
+        const nome = document.getElementById('nome').value.trim()
+        const autor = document.getElementById('autor').value
+    
+        if (!nome || !autor) {
+          return alert('Nome e autor são obrigatórios.')
+        }
+    
+        fetch('/livro', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, autor })
+        })
+          .then((res) => res.json().then((json) => ({ ok: res.ok, json })))
+          .then(({ ok, json }) => {
+            if (!ok) {
+              alert(json.error || json.message || 'Erro ao criar livro.')
+            } else {
+              alert(json.message || 'Livro criado com sucesso!')
+              document.getElementById('nome').value = ''
+              document.getElementById('autor').value = ''
+    
+              if (typeof carregarLivros === 'function') {
+                carregarLivros()
+              }
+            }
+          })
+          .catch((err) => {
+            console.error('Erro no fetch /livro:', err)
+            alert('Erro ao criar livro.')
+          })
+      })
+    } else {
+      console.warn('Form de criação de livro não encontrado (selecione o <form action="/livro">).')
+    }
+  </script>
+{% endblock %}

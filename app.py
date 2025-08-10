@@ -10,8 +10,8 @@ app.register_blueprint(autor_bp)
 
 
 @app.route("/")
-def index():
-    return render_template("index.html")
+def livros():
+    return render_template("livros.html")
 
 
 @app.route("/authors")

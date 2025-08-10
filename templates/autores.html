@@ -7,30 +7,170 @@
 {% block content %}
   <h1>Cadastrar Autor</h1>
 
-  <form action="/autor" method="post">
+  <!-- formulário de criação (agora via fetch) -->
+  <form id="formCriarAutor">
     <input type="text" id="nome" name="nome" placeholder="Nome" required />
-    <input type="submit" value="Confirmar" />
+    <input type="submit" value="Criar" />
   </form>
 
   <ul id="lista-autores"></ul>
 
+  <!-- Modal de edição (apenas nome) -->
+  <div class="modal fade" id="modalEditarAutor" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar Autor</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="formEditarAutor">
+            <div class="mb-2">
+              <label for="editarNomeAutor" class="form-label">Nome</label>
+              <input type="text" class="form-control" id="editarNomeAutor" required />
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnSalvarEdicaoAutor">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    fetch('/autores')
-      .then((response) => response.json())
-      .then((data) => {
-        const lista = document.getElementById('lista-autores')
-        if (data.length === 0) {
-          lista.innerHTML = '<li>Nenhum autor encontrado.</li>'
-        } else {
+    // variável global com o autor selecionado para editar
+    let autorSelecionadoId = null
+    
+    // função que carrega a lista de autores e monta os <li>
+    function carregarAutores() {
+      fetch('/autores')
+        .then((res) => {
+          if (!res.ok) return res.json().then((j) => Promise.reject(j))
+          return res.json()
+        })
+        .then((data) => {
+          const lista = document.getElementById('lista-autores')
+          lista.innerHTML = ''
+    
+          if (!Array.isArray(data) || data.length === 0) {
+            lista.innerHTML = '<li>Nenhum autor encontrado.</li>'
+            return
+          }
+    
           data.forEach((item) => {
             const li = document.createElement('li')
-            li.textContent = `${item.autor}`
+            li.dataset.autorId = item.id
+            // mostra nome + ícones de editar/excluir
+            li.innerHTML = `${item.nome} <i class="bi bi-pencil-square text-warning ms-2" style="cursor:pointer" title="Editar"></i> <i class="bi bi-trash text-danger ms-2" style="cursor:pointer" title="Excluir"></i>`
+    
+            // editar: abre modal e preenche input
+            li.querySelector('.bi-pencil-square').addEventListener('click', () => {
+              autorSelecionadoId = item.id
+              document.getElementById('editarNomeAutor').value = item.nome
+    
+              const modal = new bootstrap.Modal(document.getElementById('modalEditarAutor'))
+              modal.show()
+            })
+    
+            // excluir: faz DELETE e remove o li do DOM
+            li.querySelector('.bi-trash').addEventListener('click', () => {
+              if (!confirm(`Tem certeza que deseja excluir "${item.nome}"?`)) return
+    
+              fetch(`/autor/${item.id}`, { method: 'DELETE' })
+                .then((res) => {
+                  if (!res.ok) return res.json().then((j) => Promise.reject(j))
+                  return res.json()
+                })
+                .then((resp) => {
+                  // remove o elemento da lista sem reload
+                  li.remove()
+                  alert(resp.message || 'Autor excluído com sucesso!')
+                })
+                .catch((err) => {
+                  console.error('Erro ao excluir autor:', err)
+                  alert(err.error || 'Erro ao excluir autor.')
+                })
+            })
+    
             lista.appendChild(li)
           })
-        }
+        })
+        .catch((err) => {
+          console.error('Erro ao buscar autores:', err)
+          const lista = document.getElementById('lista-autores')
+          lista.innerHTML = '<li>Erro ao carregar autores.</li>'
+        })
+    }
+    
+    // criar autor via AJAX (substitui o submit padrão)
+    document.getElementById('formCriarAutor').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const nome = document.getElementById('nome').value.trim()
+      if (!nome) return alert('Nome é obrigatório.')
+    
+      fetch('/autor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome })
       })
-      .catch((error) => {
-        console.error('Erro ao buscar autores:', error)
+        .then((res) => {
+          if (!res.ok) return res.json().then((j) => Promise.reject(j))
+          return res.json()
+        })
+        .then((resp) => {
+          // limpa campo e atualiza lista sem reload
+          document.getElementById('nome').value = ''
+          carregarAutores()
+          alert(resp.message || 'Autor criado com sucesso!')
+        })
+        .catch((err) => {
+          console.error('Erro ao criar autor:', err)
+          alert(err.error || 'Erro ao criar autor.')
+        })
+    })
+    
+    // salvar edição (PATCH)
+    document.getElementById('btnSalvarEdicaoAutor').addEventListener('click', () => {
+      if (!autorSelecionadoId) {
+        alert('Nenhum autor selecionado para editar.')
+        return
+      }
+    
+      const novoNome = document.getElementById('editarNomeAutor').value.trim()
+      if (!novoNome) {
+        alert('Nome é obrigatório.')
+        return
+      }
+    
+      fetch(`/autor/${autorSelecionadoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: novoNome })
       })
+        .then((res) => {
+          if (!res.ok) return res.json().then((j) => Promise.reject(j))
+          return res.json()
+        })
+        .then((resp) => {
+          // fecha modal
+          const modalEl = document.getElementById('modalEditarAutor')
+          const modalInstance = bootstrap.Modal.getInstance(modalEl)
+          if (modalInstance) modalInstance.hide()
+    
+          // atualiza lista (ou atualize só o <li> correspondente)
+          autorSelecionadoId = null
+          carregarAutores()
+          alert(resp.message || 'Autor atualizado com sucesso!')
+        })
+        .catch((err) => {
+          console.error('Erro ao atualizar autor:', err)
+          alert(err.error || 'Erro ao atualizar autor.')
+        })
+    })
+    
+    // inicializa
+    carregarAutores()
   </script>
 {% endblock %}
